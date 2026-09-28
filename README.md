@@ -2,9 +2,6 @@
 
 Um atacante, um alvo cheio de falhas, um firewall no meio e um SOC vigiando o cabo. As quatro peças ligadas de verdade, montadas no laboratório da escola.
 
-> 📎 Os slides completos desta aula estão em [`slides/`](./slides) (ou no link do Artifact, se você tiver acesso).
-
-Baseado no guia [*"The free cybersecurity home lab, plus the four things that make it count"*](https://certgames.com/blog/cybersecurity-home-lab-for-free), de Carter Perez (CertGames), adaptado para rodar no laboratório da sala.
 
 ---
 
